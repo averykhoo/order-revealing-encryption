@@ -5,5 +5,7 @@
 * todo: 
   * [x] implement the small domain block ore described in section 3
   * [x] implement the extended domain ore described in section 4
-  * [ ] range queries
-  * ...
+  * [x] range queries
+  * [ ] optimization
+  * [ ] related work
+  * [ ] benchmarking

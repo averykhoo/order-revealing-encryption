@@ -194,7 +194,9 @@ def ore_encrypt_right(secret_key: Tuple[int, int],
             # as before, we could iterate over plaintext chars and create the enciphered chars instead
             # which would allow `permute` to be a one-way function (as long as it's still 1-to-1 for the domain of [d])
             plain_char = permute(F(k2, message[:i]), cipher_char)
-            v_i.append(cmp_char(plain_char, y_i).value + H(F(k1, message[:i] + (cipher_char,)), nonce))
+            v_i.append((cmp_char(plain_char, y_i).value +
+                        H(F(k1, message[:i] + (cipher_char,)), nonce)
+                        ) % len(CompareResult))
         out.append(tuple(v_i))
 
     return nonce, tuple(out)
