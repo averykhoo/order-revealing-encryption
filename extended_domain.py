@@ -87,8 +87,10 @@ def ore_setup():
     The master secret key sk is the pair (k1, k2).
 
     Note:
-        it would be more correct for k2 to be a random permutation of elements in the space [d]
+        it would be interesting for k2 to be a random permutation of elements in the space [d]
         and for each iteration of F(k2, message) to re-permute k2 in some way related to the chars in message
+        perhaps by mapping each char to an affine map of some kind, then applying them in some sequence
+        like how the enigma cipher worked
 
     :return:
     """
