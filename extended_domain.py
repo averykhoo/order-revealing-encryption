@@ -69,9 +69,9 @@ def permute(secret_key, data):
     In this case, it's xor based, so it is its own inverse
 
     Since this is supposed to reveal nothing about the data, the secret key must have the domain d! (as in factorial)
-    in this case, (16!) < (2 ** 64), so we do have enough randomness in the secret key
-
-
+        in this case, (16!) < (2 ** 64), so we do have enough randomness in the secret key
+        but the way it's implemented here is obviously not random enough
+        it would be better to rewrite the encrypt_right function so this can also be one-way
 
     :param secret_key:
     :param data:
