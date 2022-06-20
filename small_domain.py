@@ -1,28 +1,33 @@
 """
-based on Section 3: ORE for Small Domains
+based on Section 3: `ORE for Small Domains`
 """
+import enum
 import random
 
 N = 4096  # space of all possible messages
 lmbda = 64  # security parameter
-compare_size = 3  # possible outcomes for cmp
+
+
+class CompareResult(enum.IntEnum):
+    EQUALS = 0
+    GREATER_THAN = 1
+    LESS_THAN = 2  # == -1 % 3
 
 
 def cmp(left, right):
     """
-    make sure to also modify `compare_size`
-    more correct would be to use an enum.IntEnum
+
 
     :param left:
     :param right:
     :return:
     """
     if left == right:
-        return 0 % compare_size
+        return CompareResult.EQUALS.value
     if left > right:
-        return 1 % compare_size
+        return CompareResult.GREATER_THAN.value
     if left < right:
-        return -1 % compare_size
+        return CompareResult.LESS_THAN.value
 
 
 def F(secret_key, data):
@@ -47,7 +52,7 @@ def H(data1, data2):
     :param data:
     :return:
     """
-    return hash(('salt', data1, data2)) % compare_size
+    return hash(('salt', data1, data2)) % len(CompareResult)
 
 
 def permute(permutation, data):
@@ -112,7 +117,7 @@ def ore_encrypt_right(secret_key, message):
     out = [nonce]
     for ciphertext in range(N):
         plaintext = permute(pi_inverse, ciphertext)
-        v_i = (cmp(plaintext, message) + H(F(k, ciphertext), nonce)) % compare_size
+        v_i = (cmp(plaintext, message) + H(F(k, ciphertext), nonce)) % len(CompareResult)
         out.append(v_i)
     return tuple(out)
 
@@ -130,7 +135,7 @@ def ore_compare(ciphertext_left, ciphertext_right):
     k_prime, h = ciphertext_left
     nonce = ciphertext_right[0]
     v_i = ciphertext_right[h + 1]
-    return (v_i - H(k_prime, nonce)) % compare_size
+    return (v_i - H(k_prime, nonce)) % len(CompareResult)
 
 
 if __name__ == '__main__':
