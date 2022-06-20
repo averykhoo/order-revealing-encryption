@@ -5,41 +5,42 @@ import enum
 import random
 from typing import Tuple
 
-N = 4096  # space of all possible messages
-lmbda = 64  # security parameter such that poly(lmbda) = N
-
-# d, n > 0 such that d ** n ≥ N
-d = 1 << 4  # for my implementation below, d must be a non-zero power of 2, and should be less than 2**lmbda
+d = 1 << 4  # for my implementation below, d must be a non-zero power of 2 less than 2**lambda
 n = 5
+lmbda = 64  # security parameter such that d ** n ≥ poly(lambda)
 
 
 class CompareResult(enum.IntEnum):
     EQUALS = 0
     GREATER_THAN = 1
-    LESS_THAN = 2  # == -1 % 3
+    LESS_THAN = 2
+    NAN = 3
+
+
+def cmp_seq(left, right):
+    for _left, _right in zip(left, right):
+        if cmp(_left, _right) != 0:
+            return cmp(_left, _right)
+    return 0
 
 
 def cmp(left, right):
-    """
-
-
-    :param left:
-    :param right:
-    :return:
-    """
+    if left == 0 or right == 0:  # let's pretend zero is like NaN and cannot be compared
+        return CompareResult.NAN.value
     if left == right:
         return CompareResult.EQUALS.value
     if left > right:
         return CompareResult.GREATER_THAN.value
     if left < right:
         return CompareResult.LESS_THAN.value
+    raise RuntimeError
 
 
 def F(secret_key, data):
     """
     Let F : {0, 1} ** λ × [N] → {0, 1} ** λ be a secure PRF on variable-length inputs
 
-    The correct implementation for this would probably be HMAC-SHA3 or something like that
+    The correct implementation for this would probably be HMAC
     Note that data can have length zero
 
     :param secret_key:
@@ -55,7 +56,8 @@ def H(data1, data2):
 
     The correct implementation of this would probably be a cryptographic hash like SHA
 
-    :param data:
+    :param data1:
+    :param data2:
     :return:
     """
     return hash(('salt', data1, data2)) % len(CompareResult)
@@ -154,7 +156,7 @@ def ore_encrypt_right(secret_key, message):
             # as before, we could iterate over plaintext chars and create the enciphered chars instead
             # which would allow `permute` to be a one-way function (as long as it's still 1-to-1 for the domain of [d])
             plain_char = permute(F(k2, message[:i]), cipher_char)
-            v_i.append((cmp(plain_char, y_i) + H(F(k1, message[:i] + (cipher_char,)), nonce)) % len(CompareResult))
+            v_i.append(cmp(plain_char, y_i) + H(F(k1, message[:i] + (cipher_char,)), nonce))
         out.append(tuple(v_i))
 
     return tuple(out)
@@ -174,25 +176,24 @@ def ore_compare(ciphertext_left, ciphertext_right):
     for u_i, v_i in zip(ciphertext_left, ciphertext_right[1:]):
         k_i_prime, h_i = u_i
         z_i = v_i[h_i]
-        cmp_result = (z_i - H(k_i_prime, nonce)) % len(CompareResult)
-        if cmp_result != 0:
-            return cmp_result
+        result_i = (z_i - H(k_i_prime, nonce)) % len(CompareResult)
+        if result_i != 0:
+            return result_i
 
     return 0
 
 
 if __name__ == '__main__':
     messages = []
-    for _ in range(1000):
+    for _ in range(2000):
         messages.append(tuple(random.randint(0, d - 1) for _ in range(n)))
 
     sk = ore_setup()
     print(f'{sk=}')
-    for j in messages:
-        print(j)
-        ct_r = ore_encrypt_right(sk, j)
-        for i in messages:
-            ct_l = ore_encrypt_left(sk, i)
+    for msg_right in messages:
+        # print(msg_right)
+        ct_r = ore_encrypt_right(sk, msg_right)
+        for msg_left in messages:
+            ct_l = ore_encrypt_left(sk, msg_left)
             cmp_result = ore_compare(ct_l, ct_r)
-            assert cmp(i, j) == cmp_result
-            # print(i, j, ct_l, ct_r)
+            assert cmp_seq(msg_left, msg_right) == cmp_result
