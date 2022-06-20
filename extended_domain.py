@@ -141,7 +141,7 @@ def ore_encrypt_right(secret_key, message):
         v_i = []
         for cipher_char in range(d):
             plain_char = permute(F(k2, message[:i]), cipher_char)
-            v_i.append(cmp(plain_char, y_i) + H(F(k1, message[:i] + (cipher_char,)), nonce))
+            v_i.append((cmp(plain_char, y_i) + H(F(k1, message[:i] + (cipher_char,)), nonce)) % len(CompareResult))
         out.append(tuple(v_i))
 
     return tuple(out)
@@ -161,7 +161,7 @@ def ore_compare(ciphertext_left, ciphertext_right):
     for u_i, v_i in zip(ciphertext_left, ciphertext_right[1:]):
         k_i_prime, h_i = u_i
         z_i = v_i[h_i]
-        cmp_result = z_i - H(k_i_prime, nonce) % len(CompareResult)
+        cmp_result = (z_i - H(k_i_prime, nonce)) % len(CompareResult)
         if cmp_result != 0:
             return cmp_result
 
