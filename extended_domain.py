@@ -68,6 +68,11 @@ def permute(secret_key, data):
     Based off the paper this needs to be invertible, so it might need to be an encryption function
     In this case, it's xor based, so it is its own inverse
 
+    Since this is supposed to reveal nothing about the data, the secret key must have the domain d! (as in factorial)
+    in this case, (16!) < (2 ** 64), so we do have enough randomness in the secret key
+
+
+
     :param secret_key:
     :param data:
     :return:
@@ -80,6 +85,9 @@ def ore_setup():
     On input a security parameter λ, the setup algorithm outputs a secret key sk.
     The setup algorithm samples PRF keys k1, k2 ← {0, 1} ** λ for F.
     The master secret key sk is the pair (k1, k2).
+
+    Note:
+        it would be more correct for k2 to be a random permutation of elements in the space [d]
 
     :return:
     """
