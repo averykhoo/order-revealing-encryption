@@ -3,6 +3,7 @@ based on Section 4: `Domain Extension: A Large-Domain ORE`
 """
 import enum
 import random
+from typing import Sequence
 from typing import Tuple
 
 d = 1 << 4  # for my implementation below, d must be a non-zero power of 2 less than 2**lambda
@@ -17,22 +18,40 @@ class CompareResult(enum.IntEnum):
     NAN = 3
 
 
-def cmp_seq(left, right):
+def cmp_seq(left: Sequence[int], right: Sequence[int]):
+    """
+    compares 2 d-ary sequences of length n
+    n must be the same
+
+    :param left:
+    :param right:
+    :return:
+    """
+    assert len(left) == len(right) == n
     for _left, _right in zip(left, right):
-        if cmp(_left, _right) != 0:
-            return cmp(_left, _right)
-    return 0
+        if (res := cmp_char(_left, _right)).value:
+            return res
+    return CompareResult.EQUALS
 
 
-def cmp(left, right):
+def cmp_char(left, right) -> CompareResult:
+    """
+    compares two d-ary chars
+
+    :param left:
+    :param right:
+    :return:
+    """
+    assert 0 <= left < d
+    assert 0 <= right < d
     if left == 0 or right == 0:  # let's pretend zero is like NaN and cannot be compared
-        return CompareResult.NAN.value
+        return CompareResult.NAN
     if left == right:
-        return CompareResult.EQUALS.value
+        return CompareResult.EQUALS
     if left > right:
-        return CompareResult.GREATER_THAN.value
+        return CompareResult.GREATER_THAN
     if left < right:
-        return CompareResult.LESS_THAN.value
+        return CompareResult.LESS_THAN
     raise RuntimeError
 
 
@@ -63,7 +82,7 @@ def H(data1, data2):
     return hash(('salt', data1, data2)) % len(CompareResult)
 
 
-def permute(secret_key, data):
+def permute(secret_key: int, data: int) -> int:
     """
     Let π : {0, 1} ** λ × [d] → [d] be a secure PRP
 
@@ -79,10 +98,12 @@ def permute(secret_key, data):
     :param data:
     :return:
     """
+    assert 0 <= secret_key < 1 << lmbda
+    assert 0 <= data < d
     return (data ^ secret_key) & (d - 1)
 
 
-def ore_setup():
+def ore_setup() -> Tuple[int, int]:
     """
     On input a security parameter λ, the setup algorithm outputs a secret key sk.
     The setup algorithm samples PRF keys k1, k2 ← {0, 1} ** λ for F.
@@ -101,7 +122,9 @@ def ore_setup():
     return k1, k2
 
 
-def ore_encrypt_left(secret_key, message: Tuple[int, ...]):
+def ore_encrypt_left(secret_key: Tuple[int, int],
+                     message: Tuple[int, ...],
+                     ) -> Tuple[Tuple[int, int], ...]:
     """
     Let sk = (k1, k2).
     For each i ∈ [n], the left encryption algorithm first computes x˜ = π(F(k2, x|i−1), xi)
@@ -126,10 +149,12 @@ def ore_encrypt_left(secret_key, message: Tuple[int, ...]):
         permuted_message = permute(F(k2, message[:i]), x_i)
         out.append((F(k1, message[:i] + (permuted_message,)), permuted_message))
 
-    return out
+    return tuple(out)
 
 
-def ore_encrypt_right(secret_key, message):
+def ore_encrypt_right(secret_key: Tuple[int, int],
+                      message: Tuple[int, ...],
+                      ):
     """
     Let sk = (k1, k2).
     First, the right encryption algorithm uniformly samples a nonce r ← {0, 1} ** λ.
@@ -156,13 +181,13 @@ def ore_encrypt_right(secret_key, message):
             # as before, we could iterate over plaintext chars and create the enciphered chars instead
             # which would allow `permute` to be a one-way function (as long as it's still 1-to-1 for the domain of [d])
             plain_char = permute(F(k2, message[:i]), cipher_char)
-            v_i.append(cmp(plain_char, y_i) + H(F(k1, message[:i] + (cipher_char,)), nonce))
+            v_i.append(cmp_char(plain_char, y_i).value + H(F(k1, message[:i] + (cipher_char,)), nonce))
         out.append(tuple(v_i))
 
     return tuple(out)
 
 
-def ore_compare(ciphertext_left, ciphertext_right):
+def ore_compare(ciphertext_left, ciphertext_right) -> CompareResult:
     """
     On input two ciphertexts ct1, ct2, the compare algorithm outputs a bit b ∈ {0, 1}.
     The compare algorithm first parses ct(L) = (k', h) and ct(R) = (r, v(1), v(2), ... , v(N)),
@@ -178,9 +203,9 @@ def ore_compare(ciphertext_left, ciphertext_right):
         z_i = v_i[h_i]
         result_i = (z_i - H(k_i_prime, nonce)) % len(CompareResult)
         if result_i != 0:
-            return result_i
+            return CompareResult(result_i)
 
-    return 0
+    return CompareResult.EQUALS
 
 
 if __name__ == '__main__':
@@ -191,7 +216,6 @@ if __name__ == '__main__':
     sk = ore_setup()
     print(f'{sk=}')
     for msg_right in messages:
-        # print(msg_right)
         ct_r = ore_encrypt_right(sk, msg_right)
         for msg_left in messages:
             ct_l = ore_encrypt_left(sk, msg_left)
