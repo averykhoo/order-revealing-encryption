@@ -1,11 +1,13 @@
 """
 based on Section 5: `Encrypted Range Queries`
 """
+import bisect
 import enum
 import math
 import random
 from dataclasses import dataclass
 from dataclasses import field
+from typing import Dict
 from typing import List
 from typing import Sequence
 from typing import Tuple
@@ -221,9 +223,9 @@ def ore_compare(ciphertext_left: Tuple[Tuple[int, int], ...],
     return CompareResult.EQUALS
 
 
-@dataclass
+@dataclass(eq=False, frozen=True)
 class DatabaseServer:
-    rows: List[Tuple[int, Tuple[Tuple[int, ...], ...]]] = field(default_factory=list)
+    _rows: List[Tuple[int, Tuple[Tuple[int, ...], ...]]] = field(default_factory=list)
 
     def bisect_left(self,
                     query: Tuple[Tuple[int, int], ...],
@@ -233,10 +235,10 @@ class DatabaseServer:
         if lo < 0:
             raise ValueError('lo must be non-negative')
         if hi is None:
-            hi = len(self.rows)
+            hi = len(self._rows)
         while lo < hi:
             mid = (lo + hi) // 2
-            if ore_compare(query, self.rows[mid]) is CompareResult.LESS_THAN:
+            if ore_compare(query, self._rows[mid]) is CompareResult.LESS_THAN:
                 lo = mid + 1
             else:
                 hi = mid
@@ -251,10 +253,10 @@ class DatabaseServer:
         if lo < 0:
             raise ValueError('lo must be non-negative')
         if hi is None:
-            hi = len(self.rows)
+            hi = len(self._rows)
         while lo < hi:
             mid = (lo + hi) // 2
-            if ore_compare(query, self.rows[mid]) is CompareResult.GREATER_THAN:
+            if ore_compare(query, self._rows[mid]) is CompareResult.GREATER_THAN:
                 hi = mid
             else:
                 lo = mid + 1
@@ -266,7 +268,7 @@ class DatabaseServer:
               ) -> List[Tuple[int, Tuple[int, Tuple[Tuple[int, ...], ...]]]]:
         lo = self.bisect_left(query_lo)
         hi = self.bisect_right(query_hi)
-        return [(idx, self.rows[idx]) for idx in range(lo, hi)]
+        return [(idx, self._rows[idx]) for idx in range(lo, hi)]
 
     def add(self,
             ciphertext_left: Tuple[Tuple[int, int], ...],
@@ -274,15 +276,109 @@ class DatabaseServer:
             ) -> Tuple[int, Tuple[int, Tuple[Tuple[int, ...], ...]]]:
         assert ore_compare(ciphertext_left, ciphertext_right) is CompareResult.EQUALS
         idx = self.bisect_left(ciphertext_left)
-        self.rows.insert(idx, ciphertext_right)
+        self._rows.insert(idx, ciphertext_right)
         return idx, ciphertext_right
 
     def remove(self,
                query: Tuple[Tuple[int, int], ...],
                ) -> Tuple[int, Tuple[int, Tuple[Tuple[int, ...], ...]]]:
         idx = self.bisect_left(query)
-        if ore_compare(query, self.rows[idx]) is CompareResult.EQUALS:
-            return idx, self.rows.pop(idx)
+        if ore_compare(query, self._rows[idx]) is CompareResult.EQUALS:
+            return idx, self._rows.pop(idx)
+        else:
+            raise KeyError
+
+
+@dataclass
+class DatabaseClient:
+    database: DatabaseServer = field(default_factory=DatabaseServer)
+    secret_key: Tuple[int, int] = field(default_factory=ore_setup)
+
+    __decrypt: Dict[Tuple[int, Tuple[Tuple[int, ...], ...]], Tuple[int, ...]] = field(default_factory=dict)
+
+    def _decrypt(self, ciphertext_right: Tuple[int, Tuple[Tuple[int, ...], ...]]) -> Tuple[int, ...]:
+        return self.__decrypt[ciphertext_right]
+
+    def bisect_left(self,
+                    query: Tuple[int, ...],
+                    lo=0,
+                    hi=None,
+                    ) -> int:
+        return self.database.bisect_left(ore_encrypt_left(self.secret_key, query), lo, hi)
+
+    def bisect_right(self,
+                     query: Tuple[int, ...],
+                     lo=0,
+                     hi=None,
+                     ) -> int:
+        return self.database.bisect_right(ore_encrypt_left(self.secret_key, query), lo, hi)
+
+    def range(self,
+              query_lo: Tuple[int, ...],
+              query_hi: Tuple[int, ...],
+              ) -> List[Tuple[int, Tuple[int, ...]]]:
+        _query_lo = ore_encrypt_left(self.secret_key, query_lo)
+        _query_hi = ore_encrypt_left(self.secret_key, query_hi)
+        return [(idx, self._decrypt(ct_right)) for idx, ct_right in self.database.range(_query_lo, _query_hi)]
+
+    def add(self,
+            query: Tuple[int, ...],
+            ) -> Tuple[int, Tuple[int, ...]]:
+        ciphertext_right = ore_encrypt_right(self.secret_key, query)
+        idx, ct_right = self.database.add(ore_encrypt_left(self.secret_key, query), ciphertext_right)
+        assert ct_right == ciphertext_right
+        self.__decrypt[ciphertext_right] = query
+        return idx, self._decrypt(ct_right)
+
+    def remove(self,
+               query: Tuple[int, ...],
+               ) -> Tuple[int, Tuple[int, ...]]:
+        idx, ct_right = self.database.remove(ore_encrypt_left(self.secret_key, query))
+        plaintext = self._decrypt(ct_right)
+        del self.__decrypt[ct_right]
+        return idx, plaintext
+
+
+@dataclass(eq=False, frozen=True)
+class MockDatabaseClient:
+    _rows: List[Tuple[int]] = field(default_factory=list)
+
+    def bisect_left(self,
+                    query: Tuple[int, ...],
+                    lo=0,
+                    hi=None,
+                    ) -> int:
+        return bisect.bisect_left(self._rows, query, lo, hi)
+
+    def bisect_right(self,
+                     query: Tuple[int, ...],
+                     lo=0,
+                     hi=None,
+                     ) -> int:
+
+        return bisect.bisect_right(self._rows, query, lo, hi)
+
+    def range(self,
+              query_lo: Tuple[int, ...],
+              query_hi: Tuple[int, ...],
+              ) -> List[Tuple[int, Tuple[int, ...]]]:
+        lo = self.bisect_left(query_lo)
+        hi = self.bisect_right(query_hi)
+        return [(idx, self._rows[idx]) for idx in range(lo, hi)]
+
+    def add(self,
+            query: Tuple[int, ...],
+            ) -> Tuple[int, Tuple[int, ...]]:
+        idx = self.bisect_left(query)
+        self._rows.insert(idx, query)
+        return idx, query
+
+    def remove(self,
+               query: Tuple[int, ...],
+               ) -> Tuple[int, Tuple[int, ...]]:
+        idx = self.bisect_left(query)
+        if query == self._rows[idx]:
+            return idx, self._rows.pop(idx)
         else:
             raise KeyError
 
