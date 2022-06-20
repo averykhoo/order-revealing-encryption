@@ -2,13 +2,21 @@
 based on Section 4: `Domain Extension: A Large-Domain ORE`
 """
 import enum
+import math
 import random
 from typing import Sequence
 from typing import Tuple
 
-d = 1 << 4  # for my implementation below, d must be a non-zero power of 2 less than 2**lambda
+d = 1 << 4
 n = 5
-lmbda = 64  # security parameter such that d ** n ≥ poly(lambda)
+lmbda = 64  # security parameter such that d ** n == poly(lambda)
+
+# for my implementation below, d must be a non-zero power of 2
+assert d > 0
+assert (d & (d - 1)) == 0
+
+# to ensure randomness, d! (factorial) must be less than 2 ** lambda
+assert sum(math.log2(i) for i in range(1, d + 1)) <= lmbda
 
 
 class CompareResult(enum.IntEnum):
