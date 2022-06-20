@@ -88,6 +88,7 @@ def ore_setup():
 
     Note:
         it would be more correct for k2 to be a random permutation of elements in the space [d]
+        and for each iteration of F(k2, message) to re-permute k2 in some way related to the chars in message
 
     :return:
     """
