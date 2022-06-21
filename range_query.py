@@ -253,7 +253,6 @@ class DatabaseServer:
                     lo=0,
                     hi=None,
                     ) -> int:
-        print(query)
         if lo < 0:
             raise ValueError('lo must be non-negative')
         if hi is None:
@@ -402,7 +401,6 @@ class DatabaseClient:
         last_idx = 0
         while match:
             _match = string_to_tuple(match)
-            print(_match)
             last_idx = self.bisect_left(_match, lo=last_idx)
             if last_idx >= len(self.database):
                 return out
@@ -446,6 +444,11 @@ class MockDatabaseClient:
         hi = self.bisect_right(query_hi)
         return [(idx, self._rows[idx]) for idx in range(lo, hi)]
 
+    def prefix_range(self,
+                     query: Tuple[int, ...],
+                     ) -> List[Tuple[int, Tuple[int, ...]]]:
+        return [(i, row) for i, row in enumerate(self._rows) if row[:len(query)] == query]
+
     def add(self,
             query: Tuple[int, ...],
             ) -> Tuple[int, Tuple[int, ...]]:
@@ -466,6 +469,12 @@ class MockDatabaseClient:
             return idx, self._rows.pop(idx)
         else:
             raise KeyError
+
+    def levenshtein(self,
+                    query: Tuple[int, ...],
+                    edit_distance: int = 2,
+                    ) -> List[Tuple[int, Tuple[int, ...]]]:
+        return [(i, row) for i, row in enumerate(self._rows) if automata.levenshtein(query, row) <= edit_distance]
 
 
 if __name__ == '__main__':
@@ -495,12 +504,30 @@ if __name__ == '__main__':
         d1.add(t)
         d2.add(t)
 
-    print('-' * 10)
+    print('bisect_left')
     print(d1.bisect_left((1, 0, 0, 0, 1, 0)))
     print(d2.bisect_left((1, 0, 0, 0, 1, 0)))
 
+    print('bisect_left')
     print(d1.bisect_right((1, 0, 0, 0, 1, 0)))
     print(d2.bisect_right((1, 0, 0, 0, 1, 0)))
 
-    print(d1.levenshtein((0, 1, 0, 0, 4)))
+    print('levenshtein 1')
+    print(d1.levenshtein((0, 0, 0, 0, 4), 1))
+    print(d2.levenshtein((0, 0, 0, 0, 4), 1))
+
+    print('levenshtein 2')
+    print(d1.levenshtein((0, 0, 0, 0, 4), 2))
+    print(d2.levenshtein((0, 0, 0, 0, 4), 2))
+
+    print('levenshtein 5')
+    print(d1.levenshtein((0, 0, 0, 0, 4), 5))
+    print(d2.levenshtein((0, 0, 0, 0, 4), 5))
+
+    print('prefix_range 10')
     print(d1.prefix_range((1, 0)))
+    print(d2.prefix_range((1, 0)))
+
+    print('prefix_range 5')
+    print(d1.prefix_range((5,)))
+    print(d2.prefix_range((5,)))
