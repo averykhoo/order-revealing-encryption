@@ -9,8 +9,11 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Sequence
 from typing import Tuple
+
+import automata
 
 d = 1 << 4
 n = 5
@@ -28,23 +31,23 @@ class CompareResult(enum.IntEnum):
     EQUALS = 0
     GREATER_THAN = 1
     LESS_THAN = 2
-    NAN = 3
 
 
 def cmp_seq(left: Sequence[int], right: Sequence[int]):
     """
-    compares 2 d-ary sequences of length n
-    n must be the same
+    compares 2 d-ary sequences
+    if one sequence is a prefix of the other, the longer one is greater than its prefix
 
     :param left:
     :param right:
     :return:
     """
-    assert len(left) == len(right) == n
     for _left, _right in zip(left, right):
         if (res := cmp_char(_left, _right)).value:
             return res
-    return CompareResult.EQUALS
+    if len(left) == len(right):
+        return CompareResult.EQUALS
+    return CompareResult.GREATER_THAN if len(left) > len(right) else CompareResult.LESS_THAN
 
 
 def cmp_char(left, right) -> CompareResult:
@@ -57,8 +60,6 @@ def cmp_char(left, right) -> CompareResult:
     """
     assert 0 <= left < d
     assert 0 <= right < d
-    if left == 0 or right == 0:  # let's pretend zero is like NaN and cannot be compared
-        return CompareResult.NAN
     if left == right:
         return CompareResult.EQUALS
     if left > right:
@@ -222,7 +223,11 @@ def ore_compare(ciphertext_left: Tuple[Tuple[int, int], ...],
         if result_i != 0:
             return CompareResult(result_i)
 
-    return CompareResult.EQUALS
+    if len(ciphertext_left) == len(ciphertext_right[1]):
+        return CompareResult.EQUALS
+    if len(ciphertext_left) > len(ciphertext_right[1]):
+        return CompareResult.GREATER_THAN
+    return CompareResult.LESS_THAN
 
 
 @dataclass(eq=False, frozen=True)
@@ -234,13 +239,14 @@ class DatabaseServer:
                     lo=0,
                     hi=None,
                     ) -> int:
+        print(query)
         if lo < 0:
             raise ValueError('lo must be non-negative')
         if hi is None:
             hi = len(self._rows)
         while lo < hi:
             mid = (lo + hi) // 2
-            if ore_compare(query, self._rows[mid]) is CompareResult.LESS_THAN:
+            if ore_compare(query, self._rows[mid]) is CompareResult.GREATER_THAN:
                 lo = mid + 1
             else:
                 hi = mid
@@ -258,19 +264,30 @@ class DatabaseServer:
             hi = len(self._rows)
         while lo < hi:
             mid = (lo + hi) // 2
-            if ore_compare(query, self._rows[mid]) is CompareResult.GREATER_THAN:
+            if ore_compare(query, self._rows[mid]) is CompareResult.LESS_THAN:
                 hi = mid
             else:
                 lo = mid + 1
         return lo
 
     def range(self,
-              query_lo: Tuple[Tuple[int, int], ...],
-              query_hi: Tuple[Tuple[int, int], ...],
+              query_lo: Optional[Tuple[Tuple[int, int], ...]] = None,
+              query_hi: Optional[Tuple[Tuple[int, int], ...]] = None,
               ) -> List[Tuple[int, Tuple[int, Tuple[Tuple[int, ...], ...]]]]:
-        lo = self.bisect_left(query_lo)
-        hi = self.bisect_right(query_hi)
+        lo = self.bisect_left(query_lo) if query_lo is not None else 0
+        hi = self.bisect_right(query_hi) if query_hi is not None else len(self._rows)
         return [(idx, self._rows[idx]) for idx in range(lo, hi)]
+
+    def prefix_range(self,
+                     query: Tuple[Tuple[int, int], ...],
+                     ) -> List[Tuple[int, Tuple[int, Tuple[Tuple[int, ...], ...]]]]:
+        out = []
+        idx = self.bisect_left(query)
+        while idx < len(self._rows):
+            if ore_compare(query, self._rows[idx]) is CompareResult.LESS_THAN:
+                out.append((idx, self._rows[idx]))
+            idx += 1
+        return out
 
     def add(self,
             ciphertext_left: Tuple[Tuple[int, int], ...],
@@ -290,6 +307,12 @@ class DatabaseServer:
         else:
             raise KeyError
 
+    def __len__(self):
+        return len(self._rows)
+
+    def __getitem__(self, item):
+        return self._rows[item]
+
 
 @dataclass
 class DatabaseClient:
@@ -299,6 +322,7 @@ class DatabaseClient:
     __decrypt: Dict[Tuple[int, Tuple[Tuple[int, ...], ...]], Tuple[int, ...]] = field(default_factory=dict)
 
     def _decrypt(self, ciphertext_right: Tuple[int, Tuple[Tuple[int, ...], ...]]) -> Tuple[int, ...]:
+        # todo: actually figure out `ore_decrypt_right`
         return self.__decrypt[ciphertext_right]
 
     def bisect_left(self,
@@ -316,12 +340,18 @@ class DatabaseClient:
         return self.database.bisect_right(ore_encrypt_left(self.secret_key, query), lo, hi)
 
     def range(self,
-              query_lo: Tuple[int, ...],
-              query_hi: Tuple[int, ...],
+              query_lo: Optional[Tuple[int, ...]] = None,
+              query_hi: Optional[Tuple[int, ...]] = None,
               ) -> List[Tuple[int, Tuple[int, ...]]]:
-        _query_lo = ore_encrypt_left(self.secret_key, query_lo)
-        _query_hi = ore_encrypt_left(self.secret_key, query_hi)
+        _query_lo = ore_encrypt_left(self.secret_key, query_lo) if query_lo is not None else None
+        _query_hi = ore_encrypt_left(self.secret_key, query_hi) if query_hi is not None else None
         return [(idx, self._decrypt(ct_right)) for idx, ct_right in self.database.range(_query_lo, _query_hi)]
+
+    def prefix_range(self,
+                     query: Tuple[int, ...],
+                     ) -> List[Tuple[int, Tuple[int, ...]]]:
+        _query = ore_encrypt_left(self.secret_key, query)
+        return [(idx, self._decrypt(ct_right)) for idx, ct_right in self.database.prefix_range(_query)]
 
     def add(self,
             query: Tuple[int, ...],
@@ -340,6 +370,35 @@ class DatabaseClient:
         del self.__decrypt[ct_right]
         return idx, plaintext
 
+    def levenshtein(self,
+                    query: Tuple[int, ...],
+                    edit_distance: int = 2,
+                    ) -> List[Tuple[int, Tuple[int, ...]]]:
+        out = []
+
+        def tuple_to_string(int_tuple: Tuple[int, ...]) -> str:
+            return ''.join(chr(i) for i in int_tuple)
+
+        def string_to_tuple(string: str) -> Tuple[int, ...]:
+            return tuple(ord(char) for char in string)
+
+        # lazy hack: convert to chars
+        lev = automata.levenshtein_automaton(tuple_to_string(query), edit_distance).to_dfa()
+        match = lev.next_valid_string(u'\0')
+        last_idx = 0
+        while match:
+            _match = string_to_tuple(match)
+            print(_match)
+            last_idx = self.bisect_left(_match, lo=last_idx)
+            if last_idx >= len(self.database):
+                return out
+            _result = self._decrypt(self.database[last_idx])
+            if _match == _result:
+                out.append((last_idx, _result))
+                _result += (0,)
+            match = lev.next_valid_string(tuple_to_string(_result))
+        return out
+
 
 @dataclass(eq=False, frozen=True)
 class MockDatabaseClient:
@@ -350,15 +409,20 @@ class MockDatabaseClient:
                     lo=0,
                     hi=None,
                     ) -> int:
-        return bisect.bisect_left(self._rows, query, lo, hi)
+        if hi is None:
+            return bisect.bisect_left(self._rows, query, lo)
+        else:
+            return bisect.bisect_left(self._rows, query, lo, hi)
 
     def bisect_right(self,
                      query: Tuple[int, ...],
                      lo=0,
                      hi=None,
                      ) -> int:
-
-        return bisect.bisect_right(self._rows, query, lo, hi)
+        if hi is None:
+            return bisect.bisect_right(self._rows, query, lo)
+        else:
+            return bisect.bisect_right(self._rows, query, lo, hi)
 
     def range(self,
               query_lo: Tuple[int, ...],
@@ -373,6 +437,11 @@ class MockDatabaseClient:
             ) -> Tuple[int, Tuple[int, ...]]:
         idx = self.bisect_left(query)
         self._rows.insert(idx, query)
+
+        # consistency test: ensure rows are sorted
+        for i in range(len(self._rows) - 1):
+            assert self._rows[i] <= self._rows[i + 1], i
+
         return idx, query
 
     def remove(self,
@@ -386,15 +455,37 @@ class MockDatabaseClient:
 
 
 if __name__ == '__main__':
-    messages = []
-    for _ in range(2000):
-        messages.append(tuple(random.randint(0, d - 1) for _ in range(n)))
+    # messages = []
+    # for _ in range(2000):
+    #     messages.append(tuple(random.randint(0, d - 1) for _ in range(n)))
+    #
+    # sk = ore_setup()
+    # print(f'{sk=}')
+    # for msg_right in messages:
+    #     ct_r = ore_encrypt_right(sk, msg_right)
+    #     for msg_left in messages:
+    #         ct_l = ore_encrypt_left(sk, msg_left)
+    #         cmp_result = ore_compare(ct_l, ct_r)
+    #         assert cmp_seq(msg_left, msg_right) == cmp_result
 
-    sk = ore_setup()
-    print(f'{sk=}')
-    for msg_right in messages:
-        ct_r = ore_encrypt_right(sk, msg_right)
-        for msg_left in messages:
-            ct_l = ore_encrypt_left(sk, msg_left)
-            cmp_result = ore_compare(ct_l, ct_r)
-            assert cmp_seq(msg_left, msg_right) == cmp_result
+    d1 = DatabaseClient()
+    d2 = MockDatabaseClient()
+
+    for t in [
+        (1, 0, 0, 0, 1),
+        (1, 0, 0, 0, 2),
+        (1, 0, 0, 0, 3),
+        (1, 0, 0, 0, 4),
+        (5, 4, 3, 2, 1),
+    ]:
+        d1.add(t)
+        d2.add(t)
+
+    print('-' * 10)
+    print(d1.bisect_left((1, 0, 0, 0, 1, 0)))
+    print(d2.bisect_left((1, 0, 0, 0, 1, 0)))
+
+    print(d1.bisect_right((1, 0, 0, 0, 1, 0)))
+    print(d2.bisect_right((1, 0, 0, 0, 1, 0)))
+
+    print(d1.levenshtein((0, 1, 0, 0, 4)))
