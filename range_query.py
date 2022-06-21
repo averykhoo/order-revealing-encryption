@@ -230,6 +230,20 @@ def ore_compare(ciphertext_left: Tuple[Tuple[int, int], ...],
     return CompareResult.LESS_THAN
 
 
+def ore_prefix(ciphertext_left: Tuple[Tuple[int, int], ...],
+               ciphertext_right: Tuple[int, Tuple[Tuple[int, ...], ...]],
+               ) -> bool:
+    nonce = ciphertext_right[0]
+    for u_i, v_i in zip(ciphertext_left, ciphertext_right[1]):
+        k_i_prime, h_i = u_i
+        z_i = v_i[h_i]
+        result_i = (z_i - H(k_i_prime, nonce)) % len(CompareResult)
+        if result_i != 0:
+            return False
+
+    return True
+
+
 @dataclass(eq=False, frozen=True)
 class DatabaseServer:
     _rows: List[Tuple[int, Tuple[Tuple[int, ...], ...]]] = field(default_factory=list)
@@ -284,7 +298,7 @@ class DatabaseServer:
         out = []
         idx = self.bisect_left(query)
         while idx < len(self._rows):
-            if ore_compare(query, self._rows[idx]) is CompareResult.LESS_THAN:
+            if ore_prefix(query, self._rows[idx]):
                 out.append((idx, self._rows[idx]))
             idx += 1
         return out
@@ -489,3 +503,4 @@ if __name__ == '__main__':
     print(d2.bisect_right((1, 0, 0, 0, 1, 0)))
 
     print(d1.levenshtein((0, 1, 0, 0, 4)))
+    print(d1.prefix_range((1, 0)))
