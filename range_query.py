@@ -15,8 +15,8 @@ from typing import Tuple
 
 import automata
 
-d = 1 << 4
-n = 5
+d = 1 << 4  # dimension of the d-ary sequence
+n = 5  # length of the d-ary sequence
 lmbda = 64  # security parameter such that d ** n == poly(lambda)
 
 # for my implementation below, d must be a non-zero power of 2
@@ -246,7 +246,6 @@ def ore_prefix(ciphertext_left: Tuple[Tuple[int, int], ...],
 
 @dataclass(eq=False, frozen=True)
 class DatabaseServer:
-    
     # rows should be sorted, meaning they must be inserted in the right order
     # in an actual database, this would probably be implemented as a tree or skip list
     _rows: List[Tuple[int, Tuple[Tuple[int, ...], ...]]] = field(default_factory=list)
@@ -425,7 +424,7 @@ class MockDatabaseClient:
     mocks an ORE database client + backend server
     stores sorted plaintext rows in memory
     """
-    
+
     _rows: List[Tuple[int]] = field(default_factory=list)
 
     def bisect_left(self,

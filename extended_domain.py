@@ -8,7 +8,7 @@ from typing import Sequence
 from typing import Tuple
 
 d = 1 << 4  # dimension of the d-ary sequence
-n = 5       # length of the d-ary sequence
+n = 5  # length of the d-ary sequence
 lmbda = 64  # security parameter such that d ** n == poly(lambda)
 
 # for my implementation below, d must be a non-zero power of 2
@@ -23,13 +23,13 @@ class CompareResult(enum.IntEnum):
     EQUALS = 0
     GREATER_THAN = 1
     LESS_THAN = 2
-    NAN = 3
+    NAN = 3  # just for testing extended comparison, not from the paper
 
 
 def cmp_seq(left: Sequence[int], right: Sequence[int]):
     """
     compares 2 d-ary sequences of length n
-    n must be the same
+    n must be the same for both sequences
 
     :param left:
     :param right:
