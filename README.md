@@ -1,6 +1,6 @@
 # Order Revealing Encryption
 
-A simple implementation of the extended CLWW ORE scheme from the
+A simple implementation of the Lewi-Wu ORE scheme from the
 paper [**Order-Revealing Encryption: New Constructions, Applications, and Lower Bounds**](./BlockORE.pdf),
 available at https://www.cs.utexas.edu/~dwu4/papers/BlockORE.pdf (which builds on the CLWW ORE
 from [**Practical Order-Revealing Encryption with Limited Leakage**](./PracticalORE.pdf)
