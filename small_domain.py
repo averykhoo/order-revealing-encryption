@@ -112,7 +112,7 @@ def ore_encrypt_right(secret_key, message):
     nonce = random.randint(0, (1 << lmbda) - 1)
 
     # compute each v(i)
-    # note: instead of computing for each ciphertext, we could instead compute for each plaintext
+    # note: instead of computing for each ciphertext (using pi_inverse), we could instead compute for each plaintext (and use pi itself)
     # but since this is how the paper is written, we'll do it this way
     out = [nonce]
     for ciphertext in range(N):
