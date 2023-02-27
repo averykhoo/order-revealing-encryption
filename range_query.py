@@ -246,6 +246,9 @@ def ore_prefix(ciphertext_left: Tuple[Tuple[int, int], ...],
 
 @dataclass(eq=False, frozen=True)
 class DatabaseServer:
+    
+    # rows should be sorted, meaning they must be inserted in the right order
+    # in an actual database, this would probably be implemented as a tree or skip list
     _rows: List[Tuple[int, Tuple[Tuple[int, ...], ...]]] = field(default_factory=list)
 
     def bisect_left(self,
@@ -306,6 +309,10 @@ class DatabaseServer:
             ciphertext_left: Tuple[Tuple[int, int], ...],
             ciphertext_right: Tuple[int, Tuple[Tuple[int, ...], ...]],
             ) -> Tuple[int, Tuple[int, Tuple[Tuple[int, ...], ...]]]:
+        """
+        adds a single row into the database
+        there should probably be an optimized function to add a bunch of pre-sorted rows that can be merge-sorted in
+        """
         assert ore_compare(ciphertext_left, ciphertext_right) is CompareResult.EQUALS
         idx = self.bisect_left(ciphertext_left)
         self._rows.insert(idx, ciphertext_right)
@@ -414,6 +421,11 @@ class DatabaseClient:
 
 @dataclass(eq=False, frozen=True)
 class MockDatabaseClient:
+    """
+    mocks an ORE database client + backend server
+    stores sorted plaintext rows in memory
+    """
+    
     _rows: List[Tuple[int]] = field(default_factory=list)
 
     def bisect_left(self,
