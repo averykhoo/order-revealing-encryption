@@ -7,8 +7,8 @@ import random
 from typing import Sequence
 from typing import Tuple
 
-d = 1 << 4
-n = 5
+d = 1 << 4  # dimension of the d-ary sequence
+n = 5       # length of the d-ary sequence
 lmbda = 64  # security parameter such that d ** n == poly(lambda)
 
 # for my implementation below, d must be a non-zero power of 2
